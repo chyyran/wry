@@ -66,6 +66,7 @@ pub(crate) struct InnerWebView {
   /// through `composition::attach_host_subclass` instead of the windowed
   /// parent subclass.
   is_composition: bool,
+  composition_input_enabled: bool,
   pub controller: ICoreWebView2Controller,
   pub webview: ICoreWebView2,
   pub env: ICoreWebView2Environment,
@@ -82,7 +83,9 @@ impl Drop for InnerWebView {
       let _ = unsafe { DestroyWindow(self.hwnd) };
     }
     if self.is_composition {
-      unsafe { composition::detach_host_subclass(*self.parent.borrow()) }
+      if self.composition_input_enabled {
+        unsafe { composition::detach_host_subclass(*self.parent.borrow()) }
+      }
     } else {
       unsafe { Self::dettach_parent_subclass(*self.parent.borrow()) }
     }
@@ -138,6 +141,7 @@ impl InnerWebView {
       .clone()
       .or_else(|| composition::take_registered_visual_target(parent.0 as isize));
     let is_composition = composition_visual.is_some();
+    let composition_input_enabled = pl_attrs.composition_input_enabled;
 
     let hwnd = if is_composition {
       parent
@@ -211,6 +215,7 @@ impl InnerWebView {
       controller,
       is_child,
       is_composition,
+      composition_input_enabled,
       webview,
       env,
       drag_drop_controller,
@@ -644,9 +649,15 @@ impl InnerWebView {
 
     // Subclass parent for resizing and focus
     if is_composition {
-      // The composition host subclass owns resize/focus AND forwards
-      // mouse/pointer input + cursor to the visual-hosted webview.
-      unsafe { composition::attach_host_subclass(parent, controller)? };
+      if pl_attrs.composition_input_enabled {
+        // The composition host subclass owns resize/focus AND forwards
+        // mouse/pointer input + cursor to the visual-hosted webview.
+        unsafe { composition::attach_host_subclass(parent, controller)? };
+      }
+      // A passive composition controller is resized explicitly by its host.
+      // Never attach the windowed-webview subclass here: the controller's
+      // ParentWindow is the top-level host HWND in composition mode, so that
+      // subclass would recursively resize the host to its own client area.
     } else if !is_child {
       unsafe { Self::attach_parent_subclass(parent, controller) };
     }

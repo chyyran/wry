@@ -1765,11 +1765,8 @@ pub(crate) struct PlatformSpecificWebViewAttributes {
   default_context_menus: bool,
   environment: Option<ICoreWebView2Environment>,
   profile_name: Option<String>,
-  /// When set, the webview is created through
-  /// `CreateCoreWebView2CompositionController` targeting this
-  /// `IDCompositionVisual` (passed as `IUnknown`) instead of the windowed
-  /// controller path.
   composition_visual_target: Option<windows::core::IUnknown>,
+  composition_input_enabled: bool,
 }
 
 #[cfg(windows)]
@@ -1787,6 +1784,7 @@ impl Default for PlatformSpecificWebViewAttributes {
       environment: None,
       profile_name: None,
       composition_visual_target: None,
+      composition_input_enabled: true,
     }
   }
 }
@@ -1910,6 +1908,15 @@ pub trait WebViewBuilderExtWindows {
   /// For embedders that construct the `WebViewBuilder` internally (so this
   /// method cannot be called), see [`register_composition_visual_target`].
   fn with_composition_visual_target(self, visual: windows::core::IUnknown) -> Self;
+
+  /// Determines whether a composition-hosted webview receives mouse,
+  /// pointer, keyboard-focus, and cursor handling forwarded from its host
+  /// window.
+  ///
+  /// This defaults to `true`. Set it to `false` for passive composition
+  /// layers such as a background webview when another webview on the same
+  /// host window owns input.
+  fn with_composition_input_enabled(self, enabled: bool) -> Self;
 }
 
 #[cfg(windows)]
@@ -1969,6 +1976,11 @@ impl WebViewBuilderExtWindows for WebViewBuilder<'_> {
       .platform_specific
       .composition_visual_target
       .replace(visual);
+    self
+  }
+
+  fn with_composition_input_enabled(mut self, enabled: bool) -> Self {
+    self.platform_specific.composition_input_enabled = enabled;
     self
   }
 }
